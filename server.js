@@ -5,23 +5,32 @@ const axios = require("axios");
 const path = require("path");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000; // ✅ IMPORTANT FOR RAILWAY
 
 const DISCORD_WEBHOOK = "PASTE_YOUR_WEBHOOK_URL";
 
+// ===========================
 // MIDDLEWARE
+// ===========================
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
   secret: "super-secret-key",
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie: {
+    secure: false // set true only if using HTTPS custom domain
+  }
 }));
 
 app.use(express.static(path.join(__dirname, "public")));
 
+// ===========================
 // USERS WITH ROLES
+// ===========================
+
 const users = {
   leader: { password: "1234", role: "leader" },
   member1: { password: "1234", role: "member" },
@@ -118,24 +127,22 @@ ${itemList}
 📅 ${order.date}`
       });
     } catch (err) {
-      console.log("Webhook failed");
+      console.log("Webhook failed:", err.message);
     }
   }
 
   res.json({ success: true });
 });
 
-// EXCLUSIVE ORDER HISTORY
+// ORDER HISTORY
 app.get("/orders", (req, res) => {
   if (!req.session.user)
     return res.status(401).send("Unauthorized");
 
-  // LEADER sees all
   if (req.session.role === "leader") {
     return res.json(orders);
   }
 
-  // MEMBER sees only own
   const myOrders = orders.filter(order =>
     order.member === req.session.user
   );
@@ -188,7 +195,18 @@ app.get("/export", async (req, res) => {
   res.end();
 });
 
+// ===========================
+// HEALTH CHECK (IMPORTANT FOR RAILWAY)
+// ===========================
+
+app.get("/", (req, res) => {
+  res.send("Server is running 🚀");
+});
+
+// ===========================
 // START SERVER
+// ===========================
+
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
