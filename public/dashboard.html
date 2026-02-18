@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+  <h2>Gang Armory Dashboard</h2>
+  <h4 id="roleDisplay"></h4>
+
+  <select id="item">
+    <option value="Ammo">Ammo - $5,000</option>
+    <option value="Vest">Vest - $15,000</option>
+    <option value="Pistol">Pistol - $40,000</option>
+  </select>
+
+  <input id="quantity" type="number" placeholder="Quantity" min="1">
+
+  <button onclick="addToCart()">Add to Cart</button>
+
+  <h3>Cart</h3>
+  <ul id="cartList"></ul>
+
+  <h3>Total: $<span id="grandTotal">0</span></h3>
+
+  <button onclick="submitOrder()">Submit Order</button>
+  <button id="exportBtn" onclick="exportExcel()">Export Excel</button>
+  <button onclick="logout()">Logout</button>
+
+  <h3>Order History</h3>
+  <ul id="history"></ul>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
