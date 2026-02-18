@@ -1,128 +1,194 @@
 const express = require("express");
 const session = require("express-session");
-const bodyParser = require("body-parser");
-const XLSX = require("xlsx");
+const ExcelJS = require("exceljs");
+const axios = require("axios");
 const path = require("path");
 
 const app = express();
+const PORT = 3000;
 
-// ===== Middleware =====
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
-app.use(express.static("public"));
+const DISCORD_WEBHOOK = "PASTE_YOUR_WEBHOOK_URL";
 
-app.use(
-  session({
-    secret: "gang-secret-key",
-    resave: false,
-    saveUninitialized: true,
-  })
-);
+// MIDDLEWARE
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ===== Demo Users =====
-const users = [
-  { username: "leader1", password: "123", role: "leader" },
-  { username: "member1", password: "123", role: "member" },
-  { username: "member2", password: "123", role: "member" },
-];
+app.use(session({
+  secret: "super-secret-key",
+  resave: false,
+  saveUninitialized: false
+}));
+
+app.use(express.static(path.join(__dirname, "public")));
+
+// USERS WITH ROLES
+const users = {
+  leader: { password: "1234", role: "leader" },
+  member1: { password: "1234", role: "member" },
+  member2: { password: "1234", role: "member" }
+};
 
 let orders = [];
 
-// ===== ROOT FIX (NO MORE CANNOT GET /) =====
-app.get("/", (req, res) => {
-  res.redirect("/login.html");
-});
+/* ===========================
+   AUTH ROUTES
+=========================== */
 
-// ===== LOGIN =====
+// LOGIN
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
 
-  const user = users.find(
-    (u) => u.username === username && u.password === password
-  );
+  if (users[username] && users[username].password === password) {
+    req.session.user = username;
+    req.session.role = users[username].role;
+    return res.redirect("/dashboard.html");
+  }
 
-  if (!user) return res.send("Login Failed");
-
-  req.session.user = user.username;
-  req.session.role = user.role;
-
-  res.redirect("/dashboard.html");
+  res.send("Invalid username or password");
 });
 
-// ===== LOGOUT =====
+// LOGOUT
 app.get("/logout", (req, res) => {
-  req.session.destroy();
-  res.redirect("/login.html");
+  req.session.destroy(() => {
+    res.redirect("/login.html");
+  });
 });
 
-// ===== CHECK AUTH =====
-app.get("/check-auth", (req, res) => {
-  if (!req.session.user) return res.status(401).send("Unauthorized");
+// CURRENT USER INFO
+app.get("/me", (req, res) => {
+  if (!req.session.user)
+    return res.status(401).send("Unauthorized");
 
   res.json({
-    user: req.session.user,
-    role: req.session.role,
+    username: req.session.user,
+    role: req.session.role
   });
 });
 
-// ===== SUBMIT ORDER (MEMBER ONLY) =====
-app.post("/order", (req, res) => {
+/* ===========================
+   ORDER ROUTES
+=========================== */
+
+// SUBMIT ORDER
+app.post("/order", async (req, res) => {
   if (!req.session.user)
     return res.status(401).send("Unauthorized");
 
-  if (req.session.role !== "member")
-    return res.status(403).send("Only members can submit orders");
+  const { cart } = req.body;
 
-  const { item, price, quantity } = req.body;
+  if (!cart || cart.length === 0)
+    return res.status(400).send("Cart empty");
 
-  const total = parseInt(price) * parseInt(quantity);
+  const prices = {
+    Ammo: 5000,
+    Vest: 15000,
+    Pistol: 40000
+  };
 
-  orders.push({
+  let total_price = 0;
+
+  cart.forEach(item => {
+    if (prices[item.name]) {
+      total_price += prices[item.name] * item.quantity;
+    }
+  });
+
+  const order = {
     member: req.session.user,
-    item,
-    price: parseInt(price),
-    quantity: parseInt(quantity),
-    total,
-    date: new Date().toLocaleString(),
-  });
+    items: cart,
+    total_price,
+    date: new Date().toLocaleString()
+  };
 
-  res.send("Order submitted");
+  orders.push(order);
+
+  // DISCORD NOTIFICATION
+  if (DISCORD_WEBHOOK !== "PASTE_YOUR_WEBHOOK_URL") {
+    const itemList = cart.map(i =>
+      `• ${i.name} x${i.quantity}`
+    ).join("\n");
+
+    try {
+      await axios.post(DISCORD_WEBHOOK, {
+        content: `🚨 NEW ORDER
+👤 Member: ${order.member}
+📦 Items:
+${itemList}
+💰 Total: $${order.total_price}
+📅 ${order.date}`
+      });
+    } catch (err) {
+      console.log("Webhook failed");
+    }
+  }
+
+  res.json({ success: true });
 });
 
-// ===== ACCOUNT (ORDER HISTORY) =====
-app.get("/account", (req, res) => {
+// EXCLUSIVE ORDER HISTORY
+app.get("/orders", (req, res) => {
   if (!req.session.user)
     return res.status(401).send("Unauthorized");
 
+  // LEADER sees all
   if (req.session.role === "leader") {
     return res.json(orders);
   }
 
-  const myOrders = orders.filter(
-    (order) => order.member === req.session.user
+  // MEMBER sees only own
+  const myOrders = orders.filter(order =>
+    order.member === req.session.user
   );
 
-  res.json(myOrders);
+  return res.json(myOrders);
 });
 
-// ===== EXPORT (LEADER ONLY) =====
-app.get("/export", (req, res) => {
-  if (!req.session.user || req.session.role !== "leader")
-    return res.status(403).send("Only leader can export");
+// EXPORT EXCEL (LEADER ONLY)
+app.get("/export", async (req, res) => {
+  if (!req.session.user)
+    return res.status(401).send("Unauthorized");
 
-  const worksheet = XLSX.utils.json_to_sheet(orders);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
+  if (req.session.role !== "leader")
+    return res.status(403).send("Access Denied - Leader Only");
 
-  const filePath = path.join(__dirname, "orders.xlsx");
-  XLSX.writeFile(workbook, filePath);
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Orders");
 
-  res.download(filePath);
+  sheet.columns = [
+    { header: "Member", key: "member" },
+    { header: "Items", key: "items" },
+    { header: "Total Price", key: "total" },
+    { header: "Date", key: "date" }
+  ];
+
+  orders.forEach(order => {
+    const itemText = order.items.map(i =>
+      `${i.name} x${i.quantity}`
+    ).join(", ");
+
+    sheet.addRow({
+      member: order.member,
+      items: itemText,
+      total: order.total_price,
+      date: order.date
+    });
+  });
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+
+  res.setHeader(
+    "Content-Disposition",
+    "attachment; filename=orders.xlsx"
+  );
+
+  await workbook.xlsx.write(res);
+  res.end();
 });
 
-// ===== RAILWAY PORT =====
-const PORT = process.env.PORT || 3000;
-
+// START SERVER
 app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+  console.log(`Server running at http://localhost:${PORT}`);
 });
