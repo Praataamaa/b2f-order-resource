@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(express.static("public"));
 
 /* =========================
-   DATABASE
+   DATABASE CONNECTION
 ========================= */
 
 const pool = new Pool({
@@ -45,7 +45,8 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS items (
       id SERIAL PRIMARY KEY,
       name VARCHAR(100),
-      price INT
+      price INT,
+      category VARCHAR(50)
     )
   `);
 
@@ -66,16 +67,12 @@ async function initDB() {
 }
 
 /* =========================
-   SEED DATA
+   SEED DATA AUTOMATICALLY
 ========================= */
 
 async function seedData() {
-
-  const leader = await query(
-    "SELECT * FROM users WHERE username=$1",
-    ["leader"]
-  );
-
+  // --- Seed leader user ---
+  const leader = await query("SELECT * FROM users WHERE username=$1", ["leader"]);
   if (!leader.length) {
     const hashed = await bcrypt.hash("leader123", 10);
 
@@ -87,15 +84,36 @@ async function seedData() {
     console.log("Leader seeded (leader / leader123)");
   }
 
+  // --- Seed default items with categories ---
   const items = await query("SELECT * FROM items");
 
   if (!items.length) {
-    await query(
-      "INSERT INTO items (name,price) VALUES ($1,$2),($3,$4),($5,$6)",
-      ["Pistol",40000,"Vest",3000,"Ammo",7500]
-    );
+    const defaultItems = [
+      // Weapon
+      { name: "AK", price: 40000, category: "weapon" },
+      { name: "Micro", price: 35000, category: "weapon" },
+      { name: "Pistol", price: 30000, category: "weapon" },
+      // Ammo & Vest
+      { name: "Red Vest", price: 5000, category: "ammo" },
+      { name: "Blue Vest", price: 7000, category: "ammo" },
+      { name: "Ammo AK", price: 2000, category: "ammo" },
+      // Attachment
+      { name: "Suppressor", price: 10000, category: "attachment" },
+      { name: "Extended", price: 12000, category: "attachment" },
+      // Drug
+      { name: "Meth", price: 15000, category: "drug" },
+      { name: "Weed", price: 12000, category: "drug" },
+      { name: "Cocaine", price: 20000, category: "drug" }
+    ];
 
-    console.log("Items seeded");
+    for (const item of defaultItems) {
+      await query(
+        "INSERT INTO items (name, price, category) VALUES ($1,$2,$3)",
+        [item.name, item.price, item.category]
+      );
+    }
+
+    console.log("Default items seeded automatically");
   }
 }
 
@@ -220,7 +238,7 @@ app.get("/orders/:username/:role", async (req,res)=>{
 
 
 /* =========================
-   EXPORT EXCEL (MATCH ORDER HISTORY WITH FORMATTED TOTAL)
+   EXPORT EXCEL
 ========================= */
 
 app.get("/export/:username/:role", async (req, res) => {
@@ -272,8 +290,7 @@ app.get("/export/:username/:role", async (req, res) => {
       total: `$${g.total.toLocaleString()}`,
       time: g.time
     });
-
-    row.getCell("total").numFmt = '"$"#,##0';  // <-- ensures $151,000 format
+    row.getCell("total").numFmt = '"$"#,##0';
   });
 
   sheet.getColumn("items").alignment = { wrapText: true, vertical: "top" };
@@ -295,7 +312,8 @@ app.get("/export/:username/:role", async (req, res) => {
 
 
 /* =========================
-   START
+
+START SERVER
 ========================= */
 
 const PORT = process.env.PORT || 3000;
