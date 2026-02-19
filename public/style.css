@@ -1,35 +1,134 @@
-body {
-  background: #111;
-  color: white;
-  font-family: Arial;
+body{
+  background:#0f172a;
+  font-family:Arial;
+  color:white;
+  display:flex;
+  justify-content:center;
+  padding:40px;
 }
 
-.container {
-  width: 400px;
-  margin: 50px auto;
-  background: #1a1a1a;
-  padding: 20px;
-  border-radius: 10px;
+.center-card{
+  background:#1e293b;
+  padding:30px;
+  border-radius:12px;
+  width:300px;
+  text-align:center;
 }
 
-input, select, button {
-  width: 100%;
-  margin: 5px 0;
-  padding: 8px;
+.dashboard{
+  width:900px;
 }
 
-button {
-  background: crimson;
-  color: white;
-  border: none;
-  cursor: pointer;
+.card{
+  background:#1e293b;
+  padding:20px;
+  margin-bottom:20px;
+  border-radius:12px;
 }
 
-button:hover {
-  background: darkred;
+input,select,button{
+  display:block;
+  width:100%;
+  padding:10px;
+  margin-top:10px;
+  border:none;
+  border-radius:6px;
 }
 
-ul {
-  list-style: none;
-  padding: 0;
+button{
+  background:#3b82f6;
+  color:white;
+  cursor:pointer;
+}
+
+button:hover{ background:#2563eb; }
+
+.logout{
+  background:#ef4444;
+  width:120px;
+  float:right;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+  gap:15px;
+  margin-top:10px;
+}
+
+.user-card{
+  background:#334155;
+  padding:15px;
+  border-radius:10px;
+}
+
+.row{
+  display:flex;
+  justify-content:space-between;
+  margin-top:8px;
+}
+
+.mini-btn{
+  background:transparent;
+  color:#ef4444;
+  border:none;
+  cursor:pointer;
+  font-size:16px;
+  width:auto;
+}
+
+table th, table td{
+  border:1px solid #333;
+  padding:8px;
+  text-align:center;
+}
+
+table th{
+  background:#222;
+}
+
+.order-table {
+  width:100%;
+  border-collapse: collapse;
+  margin-top:15px;
+}
+
+.order-table th {
+  background:#222;
+  padding:12px;
+  text-align:left;
+  font-weight:600;
+  border-bottom:2px solid #333;
+}
+
+.order-table td {
+  padding:12px;
+  border-bottom:1px solid #2a2a2a;
+  vertical-align:top;
+}
+
+.order-table tr:hover {
+  background:#1a1a1a;
+}
+
+.user-col {
+  width:120px;
+  font-weight:500;
+}
+
+.items-col {
+  width:50%;
+  line-height:1.6;
+}
+
+.total-col {
+  width:120px;
+  font-weight:bold;
+  color:#4f8cff;
+}
+
+.time-col {
+  width:180px;
+  color:#aaa;
+  font-size:13px;
 }

@@ -1,191 +1,288 @@
+require("dotenv").config();
 const express = require("express");
-const session = require("express-session");
+const cors = require("cors");
+const bcrypt = require("bcryptjs");
+const { Pool } = require("pg");
 const ExcelJS = require("exceljs");
-const axios = require("axios");
-const path = require("path");
 
 const app = express();
-const PORT = process.env.PORT || 3000; // ✅ IMPORTANT FOR RAILWAY
-
-const DISCORD_WEBHOOK = "PASTE_YOUR_WEBHOOK_URL";
-
-// ===========================
-// MIDDLEWARE
-// ===========================
-
+app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.static("public"));
 
-app.use(session({
-  secret: "super-secret-key",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: false // set true only if using HTTPS custom domain
-  }
-}));
+/* =========================
+   DATABASE
+========================= */
 
-app.use(express.static(path.join(__dirname, "public")));
-
-// ===========================
-// USERS WITH ROLES
-// ===========================
-
-const users = {
-  leader: { password: "1234", role: "leader" },
-  member1: { password: "1234", role: "member" },
-  member2: { password: "1234", role: "member" }
-};
-
-let orders = [];
-
-/* ===========================
-   AUTH ROUTES
-=========================== */
-
-// LOGIN
-app.post("/login", (req, res) => {
-  const { username, password } = req.body;
-
-  if (users[username] && users[username].password === password) {
-    req.session.user = username;
-    req.session.role = users[username].role;
-    return res.redirect("/dashboard.html");
-  }
-
-  res.send("Invalid username or password");
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL &&
+       process.env.DATABASE_URL.includes("railway")
+    ? { rejectUnauthorized: false }
+    : false
 });
 
-// LOGOUT
-app.get("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.redirect("/login.html");
-  });
-});
+async function query(sql, params = []) {
+  const { rows } = await pool.query(sql, params);
+  return rows;
+}
 
-// CURRENT USER INFO
-app.get("/me", (req, res) => {
-  if (!req.session.user)
-    return res.status(401).send("Unauthorized");
+/* =========================
+   INIT TABLES
+========================= */
 
-  res.json({
-    username: req.session.user,
-    role: req.session.role
-  });
-});
+async function initDB() {
 
-/* ===========================
-   ORDER ROUTES
-=========================== */
+  await query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(100) UNIQUE,
+      password VARCHAR(255),
+      role VARCHAR(20)
+    )
+  `);
 
-// SUBMIT ORDER
-app.post("/order", async (req, res) => {
-  if (!req.session.user)
-    return res.status(401).send("Unauthorized");
+  await query(`
+    CREATE TABLE IF NOT EXISTS items (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100),
+      price INT
+    )
+  `);
 
-  const { cart } = req.body;
+  await query(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(100),
+      item VARCHAR(100),
+      qty INT,
+      price INT,
+      total INT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-  if (!cart || cart.length === 0)
-    return res.status(400).send("Cart empty");
+  await seedData();
+  console.log("Database ready");
+}
 
-  const prices = {
-    Ammo: 5000,
-    Vest: 15000,
-    Pistol: 40000
-  };
+/* =========================
+   SEED DATA
+========================= */
 
-  let total_price = 0;
+async function seedData() {
 
-  cart.forEach(item => {
-    if (prices[item.name]) {
-      total_price += prices[item.name] * item.quantity;
-    }
-  });
-
-  const order = {
-    member: req.session.user,
-    items: cart,
-    total_price,
-    date: new Date().toLocaleString()
-  };
-
-  orders.push(order);
-
-  // DISCORD NOTIFICATION
-  if (DISCORD_WEBHOOK !== "PASTE_YOUR_WEBHOOK_URL") {
-    const itemList = cart.map(i =>
-      `• ${i.name} x${i.quantity}`
-    ).join("\n");
-
-    try {
-      await axios.post(DISCORD_WEBHOOK, {
-        content: `🚨 NEW ORDER
-👤 Member: ${order.member}
-📦 Items:
-${itemList}
-💰 Total: $${order.total_price}
-📅 ${order.date}`
-      });
-    } catch (err) {
-      console.log("Webhook failed:", err.message);
-    }
-  }
-
-  res.json({ success: true });
-});
-
-// ORDER HISTORY
-app.get("/orders", (req, res) => {
-  if (!req.session.user)
-    return res.status(401).send("Unauthorized");
-
-  if (req.session.role === "leader") {
-    return res.json(orders);
-  }
-
-  const myOrders = orders.filter(order =>
-    order.member === req.session.user
+  const leader = await query(
+    "SELECT * FROM users WHERE username=$1",
+    ["leader"]
   );
 
-  return res.json(myOrders);
+  if (!leader.length) {
+    const hashed = await bcrypt.hash("leader123", 10);
+
+    await query(
+      "INSERT INTO users (username,password,role) VALUES ($1,$2,$3)",
+      ["leader", hashed, "leader"]
+    );
+
+    console.log("Leader seeded (leader / leader123)");
+  }
+
+  const items = await query("SELECT * FROM items");
+
+  if (!items.length) {
+    await query(
+      "INSERT INTO items (name,price) VALUES ($1,$2),($3,$4),($5,$6)",
+      ["Pistol",40000,"Vest",3000,"Ammo",7500]
+    );
+
+    console.log("Items seeded");
+  }
+}
+
+/* =========================
+   TIME WIB
+========================= */
+
+function toWIB(date) {
+  return new Date(date).toLocaleString("en-GB", {
+    timeZone: "Asia/Jakarta",
+    hour12: false
+  });
+}
+
+/* =========================
+   LOGIN
+========================= */
+
+app.post("/login", async (req,res)=>{
+  const { username, password } = req.body;
+
+  const users = await query(
+    "SELECT * FROM users WHERE username=$1",
+    [username]
+  );
+
+  if(!users.length) return res.json({success:false});
+
+  const user = users[0];
+
+  const match = await bcrypt.compare(password,user.password);
+
+  if(!match) return res.json({success:false});
+
+  res.json({
+    success: true,
+    role: user.role
+  });
 });
 
-// EXPORT EXCEL (LEADER ONLY)
-app.get("/export", async (req, res) => {
-  if (!req.session.user)
-    return res.status(401).send("Unauthorized");
+/* =========================
+   GET ITEMS
+========================= */
 
-  if (req.session.role !== "leader")
-    return res.status(403).send("Access Denied - Leader Only");
+app.get("/items", async (req,res)=>{
+  const items = await query("SELECT * FROM items");
+  res.json(items);
+});
+
+/* =========================
+   CREATE USER
+========================= */
+
+app.post("/create-user", async (req,res)=>{
+  const {username,password,role} = req.body;
+
+  const hashed = await bcrypt.hash(password,10);
+
+  await query(
+    "INSERT INTO users (username,password,role) VALUES ($1,$2,$3)",
+    [username,hashed,role]
+  );
+
+  res.json({success:true});
+});
+
+/* =========================
+   SUBMIT ORDER
+========================= */
+
+app.post("/order", async (req,res)=>{
+  const {username, cart} = req.body;
+
+  for(const item of cart){
+    await query(
+      "INSERT INTO orders (username,item,qty,price,total) VALUES ($1,$2,$3,$4,$5)",
+      [username,item.name,item.qty,item.price,item.total]
+    );
+  }
+
+  res.json({success:true});
+});
+
+/* =========================
+   GET ORDERS (GROUP PER SUBMIT)
+========================= */
+
+app.get("/orders/:username/:role", async (req,res)=>{
+  const {username,role} = req.params;
+
+  let orders;
+  if (role === "leader") {
+    orders = await query("SELECT * FROM orders ORDER BY created_at DESC");
+  } else {
+    orders = await query("SELECT * FROM orders WHERE username=$1 ORDER BY created_at DESC", [username]);
+  }
+
+  const grouped = {};
+
+  orders.forEach(o => {
+
+    const key = o.username + "_" + o.created_at;
+
+    if(!grouped[key]){
+      grouped[key] = {
+        username: o.username,
+        items: [],
+        total: 0,
+        time: toWIB(o.created_at)
+      };
+    }
+
+    grouped[key].items.push(
+      `${o.item} x${o.qty} ($${o.total.toLocaleString()})`
+    );
+
+    grouped[key].total += o.total;
+  });
+
+  res.json(Object.values(grouped));
+});
+
+
+/* =========================
+   EXPORT EXCEL (MATCH ORDER HISTORY WITH FORMATTED TOTAL)
+========================= */
+
+app.get("/export/:username/:role", async (req, res) => {
+  const { username, role } = req.params;
+
+  let orders;
+
+  if (role === "leader") {
+    orders = await query("SELECT * FROM orders ORDER BY created_at DESC");
+  } else {
+    orders = await query(
+      "SELECT * FROM orders WHERE username=$1 ORDER BY created_at DESC",
+      [username]
+    );
+  }
+
+  const grouped = {};
+
+  orders.forEach(o => {
+    const key = `${o.username}_${o.created_at}`;
+
+    if (!grouped[key]) {
+      grouped[key] = {
+        username: o.username,
+        items: [],
+        total: 0,
+        time: toWIB(o.created_at)
+      };
+    }
+
+    grouped[key].items.push(`• ${o.item} x${o.qty} ($${o.total.toLocaleString()})`);
+    grouped[key].total += o.total;
+  });
 
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Orders");
 
   sheet.columns = [
-    { header: "Member", key: "member" },
-    { header: "Items", key: "items" },
-    { header: "Total Price", key: "total" },
-    { header: "Date", key: "date" }
+    { header: "User", key: "username", width: 20 },
+    { header: "Item", key: "items", width: 60 },
+    { header: "Total ($)", key: "total", width: 15 },
+    { header: "Time (WIB)", key: "time", width: 25 }
   ];
 
-  orders.forEach(order => {
-    const itemText = order.items.map(i =>
-      `${i.name} x${i.quantity}`
-    ).join(", ");
-
-    sheet.addRow({
-      member: order.member,
-      items: itemText,
-      total: order.total_price,
-      date: order.date
+  Object.values(grouped).forEach(g => {
+    const row = sheet.addRow({
+      username: g.username,
+      items: g.items.join("\n"),
+      total: `$${g.total.toLocaleString()}`,
+      time: g.time
     });
+
+    row.getCell("total").numFmt = '"$"#,##0';  // <-- ensures $151,000 format
   });
+
+  sheet.getColumn("items").alignment = { wrapText: true, vertical: "top" };
 
   res.setHeader(
     "Content-Type",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   );
-
   res.setHeader(
     "Content-Disposition",
     "attachment; filename=orders.xlsx"
@@ -195,18 +292,15 @@ app.get("/export", async (req, res) => {
   res.end();
 });
 
-// ===========================
-// HEALTH CHECK (IMPORTANT FOR RAILWAY)
-// ===========================
 
-app.get("/", (req, res) => {
-  res.send("Server is running 🚀");
-});
 
-// ===========================
-// START SERVER
-// ===========================
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+/* =========================
+   START
+========================= */
+
+const PORT = process.env.PORT || 3000;
+
+initDB().then(()=>{
+  app.listen(PORT,()=>console.log("Server running on port "+PORT));
 });

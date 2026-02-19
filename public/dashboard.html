@@ -1,295 +1,379 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gang Armory Dashboard</title>
+  <title>Order Dashboard</title>
   <style>
-    body {
-      background: #0f0f0f;
+    body{
+      margin:0;
       font-family: Arial, sans-serif;
-      color: white;
-      display: flex;
-      justify-content: center;
-      padding: 40px;
+      background:#111;
+      color:#fff;
+      display:flex;
+      justify-content:center;
+    }
+    .container{
+      width:100%;
+      max-width:1100px;
+      padding:30px;
+    }
+    .card{
+      background:#1c1c1c;
+      padding:20px;
+      border-radius:12px;
+      margin-bottom:25px;
+      box-shadow:0 0 15px rgba(0,0,0,0.4);
+    }
+    h2,h3{
+      margin-top:0;
+    }
+    select,input,button{
+      padding:10px;
+      border-radius:8px;
+      border:none;
+      margin:5px 0;
+      font-size:14px;
+    }
+    select,input{
+      background:#2a2a2a;
+      color:#fff;
+      width:100%;
+    }
+    button{
+      background:#4f8cff;
+      color:white;
+      cursor:pointer;
+      transition:0.2s;
+    }
+    button:hover{
+      opacity:0.85;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:20px;
+    }
+    .cart-item{
+      display:flex;
+      justify-content:space-between;
+      margin-bottom:8px;
+    }
+    .remove-btn{
+      background:none;
+      border:none;
+      color:#ff4d4d;
+      cursor:pointer;
+      margin-left:8px;
+    }
+    .total{
+      font-weight:bold;
+      margin-top:10px;
+    }
+    .order-box{
+      background:#2a2a2a;
+      padding:12px;
+      border-radius:8px;
+      margin-bottom:10px;
+    }
+    @media(max-width:900px){
+      .grid{
+        grid-template-columns:1fr;
+      }
     }
 
-    .container {
-      width: 500px;
-      background: #181818;
-      padding: 25px;
-      border-radius: 12px;
-    }
-
-    h1 {
-      margin-bottom: 10px;
-    }
-
-    select, input {
+    /* =======================
+       ORDER HISTORY TABLE STYLES
+    ======================== */
+    table.order-table {
       width: 100%;
-      padding: 10px;
-      margin-top: 10px;
-      margin-bottom: 10px;
-      border-radius: 6px;
-      border: none;
-      font-size: 14px;
-    }
-
-    button {
-      width: 100%;
-      padding: 10px;
-      background: #e50914;
-      border: none;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      border-radius: 6px;
-      margin-top: 8px;
-    }
-
-    button:hover {
-      opacity: 0.8;
-    }
-
-    .cart-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #1f1f1f;
-      padding: 8px 12px;
-      margin-bottom: 8px;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-
-    .delete-btn {
-      background: #e50914;
-      border: none;
-      color: white;
-      font-weight: bold;
-      padding: 4px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      width: auto;
-    }
-
-    .delete-btn:hover {
-      opacity: 0.7;
-    }
-
-    .section {
+      border-collapse: collapse;
       margin-top: 20px;
+      table-layout: fixed; /* fixes header alignment */
+    }
+    table.order-table th,
+    table.order-table td {
+      padding: 16px 18px;
+      text-align: left;
+      vertical-align: top;
+    }
+    table.order-table th {
+      background: #222;
+      font-weight: 600;
+      border-bottom: 2px solid #333;
+    }
+    table.order-table td {
+      border-bottom: 1px solid #2a2a2a;
     }
 
-    .history-box {
-      background: #1f1f1f;
-      padding: 10px;
-      margin-top: 10px;
-      border-radius: 6px;
-      font-size: 13px;
+    /* Column widths */
+    table.order-table th:nth-child(1),
+    table.order-table td:nth-child(1) {
+      width: 120px;
+    }
+    table.order-table th:nth-child(2),
+    table.order-table td:nth-child(2) {
+      width: 45%;
+      white-space: normal; /* allow wrapping */
+    }
+    table.order-table th:nth-child(3),
+    table.order-table td:nth-child(3) {
+      width: 140px;
+    }
+    table.order-table th:nth-child(4),
+    table.order-table td:nth-child(4) {
+      width: 200px;
+    }
+
+    /* Space between orders */
+    table.order-table tbody tr {
+      background: #1a1a1a;
+    }
+    table.order-table tbody tr:not(:last-child) {
+      border-bottom: 15px solid #111;
+    }
+    table.order-table tbody tr:hover {
+      background: #222;
     }
   </style>
 </head>
+
 <body>
+  <div class="container">
 
-<div class="container">
-  <h1>Gang Armory Dashboard</h1>
-  <p id="userInfo"></p>
+    <h2>Order Dashboard</h2>
 
-  <!-- ORDER FORM -->
-  <select id="itemSelect">
-    <option value="Ammo" data-price="5000">Ammo - $5,000</option>
-    <option value="Vest" data-price="15000">Vest - $15,000</option>
-    <option value="Pistol" data-price="40000">Pistol - $40,000</option>
-  </select>
+    <div class="grid">
 
-  <input type="number" id="quantity" placeholder="Quantity" min="1">
+      <!-- ORDER SECTION -->
+      <div class="card">
+        <h3>New Order</h3>
 
-  <button onclick="addToCart()">Add to Cart</button>
+        <select id="itemSelect"></select>
+        <input id="qty" type="number" placeholder="Quantity">
+        <button onclick="addToCart()">Add to Cart</button>
 
-  <!-- CART -->
-  <div class="section">
-    <h2>Cart</h2>
-    <div id="cart"></div>
-    <h3 id="total">Total: $0</h3>
+        <div id="cartItems"></div>
+        <div class="total">Total: <span id="totalPrice">$0</span></div>
 
-    <button onclick="submitOrder()">Submit Order</button>
+        <button onclick="submitOrder()">Submit Order</button>
+      </div>
 
-    <!-- LEADER ONLY EXPORT -->
-    <button id="exportBtn" style="display:none;" onclick="exportExcel()">
-      Export Excel
-    </button>
+      <!-- LEADER PANEL -->
+      <div class="card" id="leaderPanel"></div>
+
+    </div>
+
+    <!-- ORDER HISTORY -->
+    <div class="card">
+      <h3>Order History</h3>
+      <table id="orderTable" class="order-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Item</th>
+            <th>Total</th>
+            <th>Time (UTC+7)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <button onclick="logout()">Logout</button>
+
   </div>
 
-  <button onclick="logout()">Logout</button>
+  <script>
+    let cart = [];
 
-  <!-- ORDER HISTORY -->
-  <div class="section">
-    <h2>Order History</h2>
-    <div id="history"></div>
-  </div>
-</div>
+    const username = localStorage.getItem("username");
+    const rawRole = localStorage.getItem("role");
+    const role = rawRole ? rawRole.toLowerCase().trim() : null;
 
-<script>
-  let cart = [];
-
-  /* =========================
-     USER INFO
-  ========================= */
-
-  async function loadUser() {
-    const res = await fetch("/me");
-
-    if (!res.ok) {
+    if (!username) {
       window.location.href = "/login.html";
-      return;
     }
 
-    const data = await res.json();
+    async function loadItems() {
+      const res = await fetch("/items");
+      const items = await res.json();
 
-    document.getElementById("userInfo").innerText =
-      "Logged in as: " + data.username + " (" + data.role + ")";
+      const select = document.getElementById("itemSelect");
+      select.innerHTML = "";
 
-    // Show export only if leader
-    if (data.role === "leader") {
-      document.getElementById("exportBtn").style.display = "block";
+      items.forEach(item => {
+        const option = document.createElement("option");
+        option.value = JSON.stringify(item);
+        option.textContent = `${item.name} - $${item.price.toLocaleString()}`;
+        select.appendChild(option);
+      });
     }
-  }
 
-  /* =========================
-     RESET QUANTITY ON CHANGE
-  ========================= */
+    function addToCart() {
+      const selected = document.getElementById("itemSelect").value;
+      const qty = parseInt(document.getElementById("qty").value);
 
-  document.getElementById("itemSelect").addEventListener("change", () => {
-    document.getElementById("quantity").value = "";
+      if (!selected || !qty || qty <= 0) {
+        alert("Invalid quantity");
+        return;
+      }
+
+      const item = JSON.parse(selected);
+      const total = item.price * qty;
+
+      cart.push({
+        name: item.name,
+        price: item.price,
+        qty,
+        total
+      });
+
+      document.getElementById("qty").value = "";
+      renderCart();
+    }
+
+    function removeItem(index) {
+      cart.splice(index, 1);
+      renderCart();
+    }
+
+    function renderCart() {
+      const container = document.getElementById("cartItems");
+      container.innerHTML = "";
+      let grandTotal = 0;
+
+      cart.forEach((item, index) => {
+        grandTotal += item.total;
+
+        const div = document.createElement("div");
+        div.className = "cart-item";
+
+        div.innerHTML = `
+          <span>${item.name} x${item.qty}</span>
+          <span>
+            $${item.total.toLocaleString()}
+            <button class="remove-btn"
+              onclick="removeItem(${index})">✕</button>
+          </span>
+        `;
+
+        container.appendChild(div);
+      });
+
+      document.getElementById("totalPrice").innerText =
+        "$" + grandTotal.toLocaleString();
+    }
+
+    async function submitOrder() {
+      if (cart.length === 0) {
+        alert("Cart empty");
+        return;
+      }
+
+      await fetch("/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, cart })
+      });
+
+      cart = [];
+      renderCart();
+      loadOrders();
+    }
+
+    // Load orders and group by submission time & user
+async function loadOrders() {
+  const res = await fetch(`/orders/${username}/${role}`);
+  const data = await res.json();
+
+  const tbody = document.querySelector("#orderTable tbody");
+  tbody.innerHTML = "";
+
+  data.forEach(orderGroup => {
+    const row = document.createElement("tr");
+
+    // Join the items array with line breaks and bullets
+    const formattedItems = orderGroup.items.map(i => "• " + i).join("<br>");
+
+    row.innerHTML = `
+      <td>${orderGroup.username}</td>
+      <td style="white-space: normal;">${formattedItems}</td>
+      <td>$${orderGroup.total.toLocaleString()}</td>
+      <td>${orderGroup.time}</td>
+    `;
+
+    tbody.appendChild(row);
   });
+}
 
-  /* =========================
-     ADD TO CART
-  ========================= */
 
-  function addToCart() {
-    const select = document.getElementById("itemSelect");
-    const quantityInput = document.getElementById("quantity");
-    const quantity = parseInt(quantityInput.value);
 
-    if (!quantity || quantity <= 0) {
-      alert("Enter valid quantity");
-      return;
+
+    function renderLeaderPanel() {
+      const panel = document.getElementById("leaderPanel");
+
+      if (role !== "leader") {
+        panel.style.display = "none";
+        return;
+      }
+
+      panel.style.display = "block";
+
+      panel.innerHTML = `
+      <h3>User Management</h3>
+
+      <input id="newUser" placeholder="Username">
+      <input id="newPass" type="password" placeholder="Password">
+
+      <select id="newRole">
+        <option value="member">Member</option>
+        <option value="leader">Leader</option>
+      </select>
+
+      <button onclick="createUser()">Create User</button>
+
+      <hr style="margin:15px 0">
+
+      <button onclick="exportExcel()">Export Orders (Excel)</button>
+      `;
     }
 
-    const name = select.value;
-    const price = parseInt(
-      select.options[select.selectedIndex].dataset.price
-    );
+    async function createUser() {
+      const newUsername = document.getElementById("newUser").value.trim();
+      const newPassword = document.getElementById("newPass").value.trim();
+      const newRole = document.getElementById("newRole").value;
 
-    cart.push({ name, price, quantity });
+      if (!newUsername || !newPassword) {
+        alert("Fill all fields");
+        return;
+      }
 
-    quantityInput.value = ""; // reset after adding
+      await fetch("/create-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: newUsername,
+          password: newPassword,
+          role: newRole
+        })
+      });
 
-    renderCart();
-  }
-
-  /* =========================
-     RENDER CART
-  ========================= */
-
-  function renderCart() {
-    const cartDiv = document.getElementById("cart");
-    const totalDiv = document.getElementById("total");
-
-    cartDiv.innerHTML = "";
-    let total = 0;
-
-    cart.forEach((item, index) => {
-      const itemTotal = item.price * item.quantity;
-      total += itemTotal;
-
-      const row = document.createElement("div");
-      row.className = "cart-row";
-
-      row.innerHTML = `
-        <span>${item.name} x${item.quantity} - $${itemTotal}</span>
-        <button class="delete-btn" onclick="removeItem(${index})">X</button>
-      `;
-
-      cartDiv.appendChild(row);
-    });
-
-    totalDiv.innerText = "Total: $" + total;
-  }
-
-  function removeItem(index) {
-    cart.splice(index, 1);
-    renderCart();
-  }
-
-  /* =========================
-     SUBMIT ORDER
-  ========================= */
-
-  async function submitOrder() {
-    if (cart.length === 0) {
-      alert("Cart is empty");
-      return;
+      alert("User created successfully");
     }
 
-    await fetch("/order", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cart })
-    });
+    function exportExcel() {
+      window.location.href = `/export/${username}/${role}`;
+    }
 
-    alert("Order submitted!");
-    cart = [];
-    renderCart();
-    loadHistory();
-  }
+    function logout() {
+      localStorage.clear();
+      window.location.href = "/login.html";
+    }
 
-  /* =========================
-     ORDER HISTORY
-  ========================= */
-
-  async function loadHistory() {
-    const res = await fetch("/orders");
-    if (!res.ok) return;
-
-    const data = await res.json();
-    const historyDiv = document.getElementById("history");
-    historyDiv.innerHTML = "";
-
-    data.forEach(order => {
-      const box = document.createElement("div");
-      box.className = "history-box";
-
-      box.innerHTML = `
-        <strong>${order.member}</strong><br>
-        ${order.items.map(i => i.name + " x" + i.quantity).join(", ")}<br>
-        Total: $${order.total_price}<br>
-        ${order.date}
-      `;
-
-      historyDiv.appendChild(box);
-    });
-  }
-
-  /* =========================
-     EXPORT
-  ========================= */
-
-  function exportExcel() {
-    window.location.href = "/export";
-  }
-
-  /* =========================
-     LOGOUT
-  ========================= */
-
-  function logout() {
-    window.location.href = "/logout";
-  }
-
-  loadUser();
-  loadHistory();
-</script>
-
+    window.onload = function () {
+      loadItems();
+      loadOrders();
+      renderLeaderPanel();
+    }
+  </script>
 </body>
 </html>
