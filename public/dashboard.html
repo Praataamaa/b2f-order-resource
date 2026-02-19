@@ -1,37 +1,295 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <link rel="stylesheet" href="style.css">
+  <title>Gang Armory Dashboard</title>
+  <style>
+    body {
+      background: #0f0f0f;
+      font-family: Arial, sans-serif;
+      color: white;
+      display: flex;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .container {
+      width: 500px;
+      background: #181818;
+      padding: 25px;
+      border-radius: 12px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    select, input {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #e50914;
+      border: none;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+
+    button:hover {
+      opacity: 0.8;
+    }
+
+    .cart-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1f1f1f;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .delete-btn {
+      background: #e50914;
+      border: none;
+      color: white;
+      font-weight: bold;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      width: auto;
+    }
+
+    .delete-btn:hover {
+      opacity: 0.7;
+    }
+
+    .section {
+      margin-top: 20px;
+    }
+
+    .history-box {
+      background: #1f1f1f;
+      padding: 10px;
+      margin-top: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+  </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>Gang Armory Dashboard</h2>
-  <h4 id="roleDisplay"></h4>
+  <h1>Gang Armory Dashboard</h1>
+  <p id="userInfo"></p>
 
-  <select id="item">
-    <option value="Ammo">Ammo - $5,000</option>
-    <option value="Vest">Vest - $15,000</option>
-    <option value="Pistol">Pistol - $40,000</option>
+  <!-- ORDER FORM -->
+  <select id="itemSelect">
+    <option value="Ammo" data-price="5000">Ammo - $5,000</option>
+    <option value="Vest" data-price="15000">Vest - $15,000</option>
+    <option value="Pistol" data-price="40000">Pistol - $40,000</option>
   </select>
 
-  <input id="quantity" type="number" placeholder="Quantity" min="1">
+  <input type="number" id="quantity" placeholder="Quantity" min="1">
 
   <button onclick="addToCart()">Add to Cart</button>
 
-  <h3>Cart</h3>
-  <ul id="cartList"></ul>
+  <!-- CART -->
+  <div class="section">
+    <h2>Cart</h2>
+    <div id="cart"></div>
+    <h3 id="total">Total: $0</h3>
 
-  <h3>Total: $<span id="grandTotal">0</span></h3>
+    <button onclick="submitOrder()">Submit Order</button>
 
-  <button onclick="submitOrder()">Submit Order</button>
-  <button id="exportBtn" onclick="exportExcel()">Export Excel</button>
+    <!-- LEADER ONLY EXPORT -->
+    <button id="exportBtn" style="display:none;" onclick="exportExcel()">
+      Export Excel
+    </button>
+  </div>
+
   <button onclick="logout()">Logout</button>
 
-  <h3>Order History</h3>
-  <ul id="history"></ul>
+  <!-- ORDER HISTORY -->
+  <div class="section">
+    <h2>Order History</h2>
+    <div id="history"></div>
+  </div>
 </div>
 
-<script src="script.js"></script>
+<script>
+  let cart = [];
+
+  /* =========================
+     USER INFO
+  ========================= */
+
+  async function loadUser() {
+    const res = await fetch("/me");
+
+    if (!res.ok) {
+      window.location.href = "/login.html";
+      return;
+    }
+
+    const data = await res.json();
+
+    document.getElementById("userInfo").innerText =
+      "Logged in as: " + data.username + " (" + data.role + ")";
+
+    // Show export only if leader
+    if (data.role === "leader") {
+      document.getElementById("exportBtn").style.display = "block";
+    }
+  }
+
+  /* =========================
+     RESET QUANTITY ON CHANGE
+  ========================= */
+
+  document.getElementById("itemSelect").addEventListener("change", () => {
+    document.getElementById("quantity").value = "";
+  });
+
+  /* =========================
+     ADD TO CART
+  ========================= */
+
+  function addToCart() {
+    const select = document.getElementById("itemSelect");
+    const quantityInput = document.getElementById("quantity");
+    const quantity = parseInt(quantityInput.value);
+
+    if (!quantity || quantity <= 0) {
+      alert("Enter valid quantity");
+      return;
+    }
+
+    const name = select.value;
+    const price = parseInt(
+      select.options[select.selectedIndex].dataset.price
+    );
+
+    cart.push({ name, price, quantity });
+
+    quantityInput.value = ""; // reset after adding
+
+    renderCart();
+  }
+
+  /* =========================
+     RENDER CART
+  ========================= */
+
+  function renderCart() {
+    const cartDiv = document.getElementById("cart");
+    const totalDiv = document.getElementById("total");
+
+    cartDiv.innerHTML = "";
+    let total = 0;
+
+    cart.forEach((item, index) => {
+      const itemTotal = item.price * item.quantity;
+      total += itemTotal;
+
+      const row = document.createElement("div");
+      row.className = "cart-row";
+
+      row.innerHTML = `
+        <span>${item.name} x${item.quantity} - $${itemTotal}</span>
+        <button class="delete-btn" onclick="removeItem(${index})">X</button>
+      `;
+
+      cartDiv.appendChild(row);
+    });
+
+    totalDiv.innerText = "Total: $" + total;
+  }
+
+  function removeItem(index) {
+    cart.splice(index, 1);
+    renderCart();
+  }
+
+  /* =========================
+     SUBMIT ORDER
+  ========================= */
+
+  async function submitOrder() {
+    if (cart.length === 0) {
+      alert("Cart is empty");
+      return;
+    }
+
+    await fetch("/order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cart })
+    });
+
+    alert("Order submitted!");
+    cart = [];
+    renderCart();
+    loadHistory();
+  }
+
+  /* =========================
+     ORDER HISTORY
+  ========================= */
+
+  async function loadHistory() {
+    const res = await fetch("/orders");
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const historyDiv = document.getElementById("history");
+    historyDiv.innerHTML = "";
+
+    data.forEach(order => {
+      const box = document.createElement("div");
+      box.className = "history-box";
+
+      box.innerHTML = `
+        <strong>${order.member}</strong><br>
+        ${order.items.map(i => i.name + " x" + i.quantity).join(", ")}<br>
+        Total: $${order.total_price}<br>
+        ${order.date}
+      `;
+
+      historyDiv.appendChild(box);
+    });
+  }
+
+  /* =========================
+     EXPORT
+  ========================= */
+
+  function exportExcel() {
+    window.location.href = "/export";
+  }
+
+  /* =========================
+     LOGOUT
+  ========================= */
+
+  function logout() {
+    window.location.href = "/logout";
+  }
+
+  loadUser();
+  loadHistory();
+</script>
+
 </body>
 </html>
